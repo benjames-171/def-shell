@@ -1,0 +1,25 @@
+local data = require "main.data"
+
+local function parse(self)
+	sx, sy, w, h = tilemap.get_bounds("#tilemap")
+
+	data.bounds = vmath.vector4(
+		(sx - 1) * data.TILE_SIZE,
+		(sy - 1) * data.TILE_SIZE,
+		((sx + w - 1) * data.TILE_SIZE) - data.CANV_W,
+		((sy + h - 1) * data.TILE_SIZE) - data.CANV_H)
+	
+	for y = sy, h+sy-1 do
+		for x = sx, w+sx-1 do
+			local t = tilemap.get_tile("#tilemap", "world", x, y)
+			if t == 1 then
+				tilemap.set_tile("#tilemap", "world", x, y, 0)
+				msg.post("common/player", "pos", {pos = data.tile2world(vmath.vector3(x, y, 0.5))})
+			end
+		end
+	end
+end
+
+function init(self)
+	parse(self)
+end

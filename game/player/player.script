@@ -1,0 +1,178 @@
+local data = require "main.data"
+
+local SPEED = 100
+local FALL_MAX = 180
+local GRAVITY = 5
+local JUMP = 180
+local BOUNCE = 1
+local COYOTE = 0.15
+local INVUL = 2
+
+function init(self)
+	self.move = vmath.vector3(0)
+	self.correction = vmath.vector3(0)
+	self.onground = 0
+	self.invul = INVUL
+	msg.post(".", "acquire_input_focus")
+end
+
+local function quit2menu(self)
+	msg.post("main:/sound", "stop_sound")
+	msg.post("main:/handler", "show_menu")
+end
+
+local function enableinput()
+	msg.post(".", "acquire_input_focus")
+end
+
+local function pauseinput(time)
+	msg.post(".", "release_input_focus")
+	timer.delay(time, false, enableinput)
+end
+
+local function move(self, dt)
+	self.move.x = self.move.x * SPEED
+	self.move.y = self.move.y - GRAVITY
+	if self.move.y < -FALL_MAX then
+		self.move.y = -FALL_MAX
+	end
+	
+	go.set_position(go.get_position() + (self.move * dt))
+	self.move.x = 0
+	msg.post("view#script", "point", {pos = go.get_position()})
+end
+
+local function pick(self)
+	local pos = data.world2tile(go.get_position())
+	local t = tilemap.get_tile("/level#tilemap", "world", pos.x, pos.y)
+
+	if t == 4 then
+		tilemap.set_tile("/level#tilemap", "world", pos.x, pos.y, 0)
+		data.sound("beep")
+	end
+end
+
+local function flash(self, dt)
+	if self.invul > 0 then
+		self.invul = self.invul - dt
+		if (self.invul * 80) % 10 < 6 then
+			msg.post("#sprite", "disable")
+		else
+			msg.post("#sprite", "enable")
+		end
+	end
+end
+
+function update(self, dt)
+	if data.state == data.STATE_PLAYING then
+		dt = data.capdt(dt)
+		move(self, dt)
+		pick(self)
+		flash(self, dt)
+	end
+
+	if self.onground > 0 then
+		self.onground = self.onground - dt
+	end
+	
+	self.correction = vmath.vector3(0)
+end
+
+local function jump(self)
+	if self.onground > 0 then
+		self.move.y = JUMP
+		self.onground = 0
+	end
+end
+
+local function collision(self, message)
+	if message.distance > 0 then
+		local proj = vmath.project(self.correction, message.normal * message.distance)
+		if proj < 1 then
+			local comp = (message.distance - message.distance * proj) * message.normal
+			go.set_position(go.get_position() + comp)
+			self.correction = self.correction + comp
+			if math.abs(message.normal.x) == 1 then
+				self.move.x = 0
+			end
+
+			if message.normal.y > 0.9 then
+				if self.move.y < -2 then
+					--landed
+				end
+				
+				if self.move.y < 0 then
+					self.move.y = 0
+					self.onground = COYOTE
+				end
+			elseif message.normal.y < -0.9 and self.move.y > 0 then
+				self.move.y = -BOUNCE
+			end
+		end
+	end
+end
+
+local function input_playing(self, action_id, action)
+	if action_id == hash("left") then
+		self.move.x = -1
+	elseif action_id == hash("right") then
+		self.move.x = 1
+	elseif action_id == hash("action") and action.pressed then
+		jump(self)
+	elseif action_id == hash("exit") and action.pressed then
+		msg.post("view#pause", "show")
+	elseif action_id == hash("debug") and action.pressed and sys.get_engine_info().is_debug then
+		msg.post("/common/view#clear", "show", {state = data.STATE_CLEAR})
+	end
+end
+
+local function input_clear(self, action_id, action)
+	if action_id == hash("action") and action.pressed then
+		data.level = data.level + 1
+		if data.level > data.MAX_LEVELS then
+			data.level = 1
+			quit2menu(self)
+		else
+			msg.post("game:/loader", "new_level")
+		end
+	end
+end
+
+local function input_gameover(self, action_id, action)
+	if (action_id == hash("exit") or action_id == hash("action")) and action.pressed then
+		quit2menu(self)
+	end
+end
+
+local function input_complete(self, action_id, action)
+	if (action_id == hash("exit") or action_id == hash("action")) and action.pressed then
+		quit2menu(self)
+	end
+end
+
+function on_input(self, action_id, action)
+	if action.value < 0.2 then return
+	end	
+	
+	if data.state == data.STATE_PLAYING then
+		input_playing(self, action_id, action)
+	elseif data.state == data.STATE_PAUSE then
+		msg.post("view#pause", "input", {action_id = action_id, action = action})
+	elseif data.state == data.STATE_CLEAR then
+		input_clear(self, action_id, action)
+	elseif data.state == data.STATE_GAMEOVER then
+		input_gameover(self, action_id, action)
+	elseif data.state == data.STATE_COMPLETE then
+		input_complete(self, action_id, action)
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("pos") then
+		go.set_position(message.pos)
+	elseif message_id == hash("contact_point_response") then
+		collision(self, message)
+	elseif message_id == hash("quit") then
+		quit2menu(self)
+	end
+end

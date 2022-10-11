@@ -1,0 +1,11 @@
+/.internal
+/build
+.externalToolBuilders
+.DS_Store
+Thumbs.db
+pspbrwse.jbf
+.lock-wscript
+*.pyc
+.project
+.cproject
+builtins
