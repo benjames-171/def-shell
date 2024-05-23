@@ -16,10 +16,13 @@ components {
 embedded_components {
   id: "sprite"
   type: "sprite"
-  data: "tile_set: \"/game/core/game.tilesource\"\n"
-  "default_animation: \"player\"\n"
+  data: "default_animation: \"player\"\n"
   "material: \"/builtins/materials/sprite.material\"\n"
   "blend_mode: BLEND_MODE_ALPHA\n"
+  "textures {\n"
+  "  sampler: \"texture_sampler\"\n"
+  "  texture: \"/game/core/game.tilesource\"\n"
+  "}\n"
   ""
   position {
     x: 0.0
@@ -59,6 +62,7 @@ embedded_components {
   "    }\n"
   "    index: 0\n"
   "    count: 1\n"
+  "    id: \"\"\n"
   "  }\n"
   "  data: 5.0\n"
   "}\n"
